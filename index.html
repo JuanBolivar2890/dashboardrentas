@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Rentas — Ejecución & KPIs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Nunito+Sans:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#140E08;
+    --panel:#1E150D;
+    --panel-2:#271B10;
+    --border:#3E2C18;
+    --text:#F6EEE3;
+    --text-dim:#CDB197;
+    --text-faint:#93765A;
+    --orange:#F07C1D;
+    --orange-dim:#8A4A12;
+    --orange-soft:rgba(240,124,29,0.14);
+    --orange-2:#FFB25E;
+    --green:#5FBF8F;
+    --green-dim:#2E4A3B;
+    --red:#E2665C;
+    --red-dim:#4A2C28;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:radial-gradient(ellipse at top, #1A1109 0%, var(--bg) 55%);
+    color:var(--text); font-family:'Nunito Sans',sans-serif;
+    -webkit-font-smoothing:antialiased; padding:26px 30px 60px; min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace; font-variant-numeric: tabular-nums;}
+  .display{font-family:'Poppins',sans-serif;}
+
+  header{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--border); padding-bottom:16px; margin-bottom:18px; flex-wrap:wrap; gap:14px;
+  }
+  .brand-eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.14em;
+    color:var(--orange-2); text-transform:uppercase; margin-bottom:6px;
+  }
+  h1{font-family:'Poppins',sans-serif; font-size:25px; font-weight:700; margin:0; color:var(--text);}
+  .subtitle{color:var(--text-dim); font-size:13px; margin-top:4px;}
+  .header-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  button{
+    font-family:'Nunito Sans',sans-serif; font-size:13px; font-weight:700;
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:9px; padding:9px 14px; cursor:pointer; transition:.15s;
+  }
+  button:hover{border-color:var(--orange-dim);}
+  button.primary{background:var(--orange); color:#20130A; border-color:var(--orange);}
+  button.primary:hover{background:var(--orange-2);}
+  button.ghost{background:transparent;}
+  button:disabled{opacity:.5; cursor:default;}
+  #fileInput{display:none;}
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint);
+    border:1px solid var(--border); border-radius:20px; padding:6px 12px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .dot{width:6px;height:6px;border-radius:50%; background:var(--text-faint);}
+  .dot.live{background:var(--green); box-shadow:0 0 6px var(--green);}
+  .dot.err{background:var(--red); box-shadow:0 0 6px var(--red);}
+  .dot.loading{background:var(--orange); box-shadow:0 0 6px var(--orange); animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  /* ---------- Filter hierarchy ---------- */
+  .hierarchy-bar{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:18px;
+  }
+  .hierarchy-item{display:flex; flex-direction:column; gap:5px; min-width:170px; flex:1;}
+  .hierarchy-label{
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--orange-2); display:flex; align-items:center; gap:6px;
+  }
+  .hierarchy-badge{
+    width:16px; height:16px; border-radius:50%; background:var(--orange-soft); color:var(--orange-2);
+    font-size:9px; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;
+  }
+  select{
+    font-family:'Nunito Sans',sans-serif; font-size:13px; font-weight:600;
+    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
+    border-radius:9px; padding:9px 10px; cursor:pointer;
+  }
+  select:hover{border-color:var(--orange-dim);}
+  .hierarchy-sep{width:1px; align-self:stretch; background:var(--border); margin:0 2px;}
+  .corte-item{min-width:130px; flex:0 0 auto;}
+
+  .empty-state{
+    border:1px dashed var(--border); border-radius:var(--radius); padding:50px 40px;
+    text-align:center; color:var(--text-dim); margin-bottom:24px; background:var(--panel);
+  }
+  .empty-state .display{font-size:19px; color:var(--text); margin-bottom:10px; font-weight:600;}
+  .empty-state p{font-size:13px; line-height:1.6; max-width:560px; margin:0 auto 16px;}
+  .fallback-actions{display:flex; gap:10px; justify-content:center; margin-top:18px; flex-wrap:wrap;}
+
+  .banner{
+    border:1px solid var(--red-dim); background:rgba(226,102,92,0.08); color:var(--red);
+    border-radius:9px; padding:10px 14px; font-size:12px; margin-bottom:18px; display:none;
+  }
+
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px 20px; margin-bottom:18px;}
+  .panel-title{font-family:'Poppins',sans-serif; font-size:15px; font-weight:600; margin:0 0 4px;}
+  .panel-desc{font-size:12px; color:var(--text-dim); margin:0 0 16px;}
+
+  /* ---------- Resumen (Mes / Acumulado / Proyección) ---------- */
+  .resumen-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .resumen-table th{
+    text-align:center; padding:8px 10px; font-weight:700; font-family:'Poppins',sans-serif; font-size:11.5px;
+    color:var(--orange-2); border-bottom:2px solid var(--border);
+  }
+  .resumen-table th.group{background:var(--orange-soft); border-radius:6px 6px 0 0;}
+  .resumen-table td{padding:9px 10px; border-bottom:1px solid #2A1E12; text-align:right; font-family:'IBM Plex Mono',monospace;}
+  .resumen-table td.rowlabel{text-align:left; font-family:'Nunito Sans',sans-serif; font-weight:700; color:var(--text);}
+  .resumen-table td.gap{font-weight:700;}
+  .resumen-table .pos{color:var(--green);}
+  .resumen-table .neg{color:var(--red);}
+
+  .pending-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:18px;}
+  .kpi-card.pending{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; opacity:.65;}
+  .kpi-label{font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;}
+  .kpi-value{font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600; color:var(--text-faint);}
+  .kpi-sub{font-size:11px; margin-top:4px; color:var(--text-faint);}
+
+  /* ---------- Runway ---------- */
+  .runway-row{margin-bottom:16px;}
+  .runway-row:last-child{margin-bottom:0;}
+  .runway-label{display:flex; justify-content:space-between; font-size:12px; color:var(--text-dim); margin-bottom:6px;}
+  .runway-label .name{color:var(--text); font-weight:700;}
+  .runway-track{position:relative; height:22px; background:var(--panel-2); border-radius:7px; overflow:visible; border:1px solid var(--border);}
+  .runway-fill{position:absolute; top:0; left:0; height:100%; border-radius:6px; transition:width .4s ease;}
+  .runway-fill.ingreso{background:linear-gradient(90deg,#2E4A3B,var(--green));}
+  .runway-fill.gasto{background:linear-gradient(90deg,var(--orange-dim),var(--orange));}
+  .runway-fill.over-bad{background:linear-gradient(90deg,#4A2C28,var(--red));}
+  .time-marker{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--text);}
+  .time-marker::after{content:attr(data-label); position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--text-faint); white-space:nowrap;}
+  .runway-figures{display:flex; justify-content:space-between; margin-top:6px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint);}
+
+  .main-grid{display:grid; grid-template-columns:1.5fr 1fr; gap:18px; margin-bottom:18px;}
+  @media(max-width:1050px){.main-grid{grid-template-columns:1fr;}}
+
+  /* ---------- Drill table (grouped headers) ---------- */
+  .drill-wrap{overflow-x:auto;}
+  table.drill{width:100%; border-collapse:collapse; font-size:12px; min-width:920px;}
+  table.drill th{
+    text-align:center; padding:7px 8px; color:var(--text-faint); font-weight:700; font-size:10px;
+    text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--border); white-space:nowrap;
+  }
+  table.drill th.group-mes{background:rgba(147,118,90,0.1); color:var(--text-dim);}
+  table.drill th.group-acum{background:var(--orange-soft); color:var(--orange-2);}
+  table.drill th.group-cierre{background:rgba(95,191,143,0.1); color:var(--green);}
+  table.drill th.sortable{cursor:pointer;}
+  table.drill th.sortable:hover{color:var(--orange-2);}
+  table.drill th.left{text-align:left;}
+  table.drill td{padding:7px 8px; border-bottom:1px solid #2A1E12; font-family:'IBM Plex Mono',monospace; color:var(--text-dim); white-space:nowrap; text-align:right;}
+  table.drill td.linea{font-family:'Nunito Sans',sans-serif; font-weight:700; color:var(--text); white-space:normal; text-align:left;}
+  table.drill td.paquete{font-family:'Nunito Sans',sans-serif; color:var(--text-faint); font-size:10.5px; text-align:left;}
+  table.drill tr:hover td{background:var(--panel-2);}
+  tr.paquete-row td{background:var(--orange-soft); font-weight:800; cursor:pointer; border-bottom:1px solid var(--orange-dim);}
+  tr.paquete-row:hover td{background:rgba(240,124,29,0.22);}
+  tr.paquete-row .linea{color:var(--orange-2); display:flex; align-items:center; gap:7px;}
+  tr.paquete-row .count{color:var(--text-faint); font-weight:600; font-size:10.5px;}
+  .toggle-icon{display:inline-block; width:14px; text-align:center; font-size:10px; color:var(--orange-2); transition:transform .15s;}
+  .toggle-icon.open{transform:rotate(90deg);}
+  tr.categoria-row td.linea{padding-left:26px; font-weight:600; color:var(--text-dim);}
+  .gap-cell{font-weight:700; padding:3px 8px; border-radius:5px; display:inline-block; min-width:58px; text-align:center;}
+  .tag{font-size:9.5px; padding:2px 7px; border-radius:10px; border:1px solid var(--border); color:var(--text-dim); font-family:'Nunito Sans',sans-serif; font-weight:700;}
+  .tag.ingreso{color:var(--green); border-color:var(--green-dim);}
+  .tag.gasto{color:var(--orange-2); border-color:var(--orange-dim);}
+
+  .movers-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .mover-item{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #2A1E12; font-size:12px;}
+  .mover-item:last-child{border-bottom:none;}
+  .mover-name{color:var(--text); font-weight:700;}
+  .mover-sub{color:var(--text-faint); font-size:10.5px;}
+  .mover-val{font-family:'IBM Plex Mono',monospace; font-weight:700;}
+
+  .chart-wrap{position:relative; height:220px;}
+  footer{margin-top:26px; text-align:center; color:var(--text-faint); font-size:11px; font-family:'IBM Plex Mono',monospace;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand-eyebrow">Inversiones Bolívar · Proyectos de Vida</div>
+    <h1>Control de Rentas</h1>
+    <div class="subtitle">Ejecución del mes, acumulado y proyección de cierre por activo</div>
+  </div>
+  <div class="header-actions">
+    <span class="status-pill"><span class="dot" id="statusDot"></span><span id="statusText">Conectando...</span></span>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    <button class="ghost" id="btnRefresh">↻ Actualizar</button>
+    <button class="primary" id="btnUpload" style="display:none;">Cargar Excel</button>
+  </div>
+</header>
+
+<div id="errorBanner" class="banner"></div>
+
+<div id="emptyState" class="empty-state" style="display:none;">
+  <div class="display">No se pudo conectar a la fuente de datos</div>
+  <p>El dashboard intenta traer los datos automáticamente desde el flow de Power Automate. Si falló, podés reintentar, o cargar un archivo manualmente mientras tanto.</p>
+  <div class="fallback-actions">
+    <button class="primary" id="btnRetry">Reintentar conexión</button>
+    <button class="ghost" id="btnUpload2">Cargar Excel manual</button>
+    <button class="ghost" id="btnDemo">Ver con datos de ejemplo</button>
+  </div>
+</div>
+
+<div id="dashboard" style="display:none;">
+
+  <div class="hierarchy-bar">
+    <div class="hierarchy-item">
+      <div class="hierarchy-label"><span class="hierarchy-badge">1</span>Activo</div>
+      <select id="activoFilter"><option value="Todos">Todos los activos</option></select>
+    </div>
+    <div class="hierarchy-item">
+      <div class="hierarchy-label"><span class="hierarchy-badge">2</span>Tipo</div>
+      <select id="tipoDetalleFilter"><option value="Todos">Todos los tipos</option></select>
+    </div>
+    <div class="hierarchy-item">
+      <div class="hierarchy-label"><span class="hierarchy-badge">3</span>Paquete</div>
+      <select id="paqueteFilter"><option value="Todos">Todos los paquetes</option></select>
+    </div>
+    <div class="hierarchy-item">
+      <div class="hierarchy-label"><span class="hierarchy-badge">4</span>Categoría</div>
+      <select id="categoriaFilter"><option value="Todos">Todas las categorías</option></select>
+    </div>
+    <div class="hierarchy-sep"></div>
+    <div class="hierarchy-item corte-item">
+      <div class="hierarchy-label">Corte</div>
+      <select id="corteMes"></select>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Resumen ejecutivo</div>
+    <div class="panel-desc">Tres cortes de tiempo lado a lado: el mes puntual, lo acumulado del año, y hacia dónde vas a cerrar.</div>
+    <table class="resumen-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="group" colspan="2">Mes</th>
+          <th class="group" colspan="2">Acumulado al mes</th>
+          <th class="group" colspan="3">Proyección de cierre</th>
+        </tr>
+        <tr>
+          <th style="text-align:left;">&nbsp;</th>
+          <th>Ejecutado</th><th>Gap</th>
+          <th>Ejecutado</th><th>Gap</th>
+          <th>Proyección</th><th>Presup. anual</th><th>Gap</th>
+        </tr>
+      </thead>
+      <tbody id="resumenBody"></tbody>
+    </table>
+  </div>
+
+  <div class="pending-grid">
+    <div class="kpi-card pending">
+      <div class="kpi-label">Cap rate</div>
+      <div class="kpi-value">Pendiente</div>
+      <div class="kpi-sub">Requiere FMV y NOI por activo</div>
+    </div>
+    <div class="kpi-card pending">
+      <div class="kpi-label">Cash on cash</div>
+      <div class="kpi-value">Pendiente</div>
+      <div class="kpi-sub">Requiere equity invertido por activo</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Pista de ejecución — acumulado del año</div>
+    <div class="panel-desc">La marca vertical indica el % del año transcurrido a la fecha de corte. La barra es tu ejecución acumulada como % del presupuesto anual.</div>
+    <div id="runwayRows"></div>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">Detalle por categoría</div>
+      <div class="panel-desc">Ordená por columna. Los tres bloques de color separan Mes / Acumulado / Proyección de cierre.</div>
+      <div class="drill-wrap">
+      <table class="drill">
+        <thead>
+          <tr>
+            <th class="left" rowspan="2">Paquete / Categoría</th>
+            <th rowspan="2">Tipo</th>
+            <th class="group-mes" colspan="3">Mes</th>
+            <th class="group-acum" colspan="3">Acumulado al mes</th>
+            <th class="group-cierre" colspan="3">Proyección de cierre</th>
+          </tr>
+          <tr>
+            <th class="group-mes sortable" data-sort="presupuestoMes">Presup.</th>
+            <th class="group-mes sortable" data-sort="ejecutadoMes">Ejec.</th>
+            <th class="group-mes sortable" data-sort="gapMesPct">Gap</th>
+            <th class="group-acum sortable" data-sort="presupuestoAcum">Presup.</th>
+            <th class="group-acum sortable" data-sort="ejecutadoAcum">Ejec.</th>
+            <th class="group-acum sortable" data-sort="gapAcumPct">Gap</th>
+            <th class="group-cierre sortable" data-sort="presupuestoAnual">Presup. anual</th>
+            <th class="group-cierre sortable" data-sort="proyeccion">Proyección</th>
+            <th class="group-cierre sortable" data-sort="gapCierrePct">Gap</th>
+          </tr>
+        </thead>
+        <tbody id="drillBody"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Categorías más disparadas / mejor comportadas</div>
+      <div class="panel-desc">Ranking por desviación proyectada al cierre.</div>
+      <div class="movers-grid">
+        <div>
+          <div class="kpi-label" style="margin-bottom:8px;">Mayor desvío negativo</div>
+          <div id="moversBad"></div>
+        </div>
+        <div>
+          <div class="kpi-label" style="margin-bottom:8px;">Mejor desempeño</div>
+          <div id="moversGood"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">Burn rate acumulado</div>
+      <div class="panel-desc">Ejecutado acumulado vs. presupuesto lineal esperado vs. proyección de cierre.</div>
+      <div class="chart-wrap"><canvas id="burnChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Varianza por categoría y mes</div>
+      <div class="panel-desc">Heatmap: verde = a favor, rojo = en contra, según tipo.</div>
+      <div id="heatmapWrap" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>control-de-rentas · datos vía Power Automate, procesados localmente en el navegador</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const API_URL = "https://default7ff3b0172a5b4042a2ed955c6838ef.29.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/e17a5d43c0e44b359e1286569d3207cd/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=IhboFhavGCz08N4Gnc2x0LfdKNgwOJdZpVUODH0FWec";
+
+  let rawRows = [];
+  let categoriaMap = new Map();
+  let filtroActivo = "Todos";
+  let filtroTipoDetalle = "Todos";
+  let filtroPaquete = "Todos";
+  let filtroCategoria = "Todos";
+  let corteMes = new Date().getMonth() + 1;
+  let sortState = {key:"gapCierrePct", dir:-1};
+  let burnChartInstance = null;
+
+  const el = id => document.getElementById(id);
+  const fmtMoney = n => "$" + Math.round(n).toLocaleString("en-US");
+  const fmtPct = n => (n>=0?"+":"") + n.toFixed(1) + "%";
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const esc = s => String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  function setStatus(text, mode){
+    el("statusText").textContent = text;
+    el("statusDot").className = "dot" + (mode ? " "+mode : "");
+  }
+  function showError(msg){
+    const b = el("errorBanner");
+    if(msg){ b.textContent = msg; b.style.display = "block"; } else { b.style.display = "none"; }
+  }
+
+  async function saveData(){
+    try{ if(window.storage){ await window.storage.set("rentas-rows", JSON.stringify(rawRows)); } }
+    catch(e){}
+  }
+  async function loadCached(){
+    try{
+      if(window.storage){
+        const res = await window.storage.get("rentas-rows");
+        if(res && res.value){ return JSON.parse(res.value); }
+      }
+    }catch(e){}
+    return null;
+  }
+
+  function buildCategoriaMap(categoriasArray){
+    categoriaMap = new Map();
+    (categoriasArray||[]).forEach(c=>{
+      const key = String(c.Key||"").trim();
+      if(key && !categoriaMap.has(key)){
+        categoriaMap.set(key, {categoria: c.Categoria || null, paquete: c.Paquete || null, tipoDetalle: c.tipoDetalle || c.Tipo || null});
+      }
+    });
+  }
+
+  function normalize(apiArray){
+    return apiArray.map(r=>{
+      const key = String(r.Key||"").trim();
+      const cat = key ? categoriaMap.get(key) : null;
+      return {
+        activo: String(r.Activo||"").trim(),
+        linea: (cat && cat.categoria) ? cat.categoria : String(r.Linea||"").trim(),
+        paquete: (cat && cat.paquete) ? cat.paquete : null,
+        tipoDetalle: (cat && cat.tipoDetalle) ? cat.tipoDetalle : null,
+        tipo: String(r.Tipo||"").trim(),
+        mes: parseInt(r.Mes,10),
+        monto: parseFloat(r.Monto)||0,
+        fuente: String(r.Fuente||"").trim()
+      };
+    }).filter(r=>r.activo && r.mes>=1 && r.mes<=12);
+  }
+
+  async function fetchFromAPI(){
+    setStatus("Conectando...", "loading");
+    showError(null);
+    try{
+      const res = await fetch(API_URL, {method:"GET"});
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      const json = await res.json();
+      let transaccionesRaw, categoriasRaw;
+      if(Array.isArray(json)){ transaccionesRaw = json; categoriasRaw = []; }
+      else if(json.transacciones){ transaccionesRaw = json.transacciones; categoriasRaw = json.categorias || []; }
+      else { transaccionesRaw = json.value || []; categoriasRaw = []; }
+      buildCategoriaMap(categoriasRaw);
+      const parsed = normalize(transaccionesRaw);
+      if(parsed.length===0) throw new Error("La API respondió sin filas válidas");
+      rawRows = parsed;
+      await saveData();
+      buildFilters();
+      render();
+      return true;
+    }catch(err){
+      console.warn("Fallo la conexión automática:", err);
+      const cached = await loadCached();
+      if(cached && cached.length){
+        rawRows = cached;
+        buildFilters();
+        render();
+        setStatus("Sin conexión — mostrando última copia guardada", "err");
+        showError("No se pudo conectar al flow ahora mismo. Mostrando los últimos datos guardados en este navegador.");
+      } else {
+        setStatus("Sin conexión", "err");
+        el("emptyState").style.display = "block";
+        el("dashboard").style.display = "none";
+        showError("No se pudo conectar al flow y no hay datos guardados todavía en este navegador.");
+      }
+      return false;
+    }
+  }
+
+  el("btnRefresh").addEventListener("click", fetchFromAPI);
+  el("btnRetry").addEventListener("click", fetchFromAPI);
+
+  const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  function initMonthSelect(){
+    const sel = el("corteMes");
+    sel.innerHTML = "";
+    meses.forEach((m,i)=>{
+      const opt = document.createElement("option");
+      opt.value = i+1; opt.textContent = "Corte: " + m;
+      if(i+1===corteMes) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener("change", ()=>{ corteMes = parseInt(sel.value,10); render(); });
+  }
+
+  function wireManualUpload(){
+    const trigger = ()=> el("fileInput").click();
+    el("btnUpload").addEventListener("click", trigger);
+    el("btnUpload2").addEventListener("click", trigger);
+    el("fileInput").addEventListener("change", (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt)=>{
+        try{
+          const wb = XLSX.read(evt.target.result, {type:"binary"});
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet, {defval:""});
+          const parsed = normalize(json.map(r=>({
+            Activo:r.Activo, Linea:r.Linea||r["Línea"], Tipo:r.Tipo, Mes:r.Mes, Monto:r.Monto, Fuente:r.Fuente, Key:r.Key
+          })));
+          if(parsed.length===0){ alert("No se encontraron filas válidas."); return; }
+          rawRows = parsed;
+          saveData();
+          buildFilters();
+          render();
+          setStatus(`${rawRows.length} filas · carga manual`, "live");
+          showError(null);
+        }catch(err){
+          alert("No pude leer el archivo. Verificá que sea un .xlsx válido.\n" + err.message);
+        }
+      };
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  el("btnDemo").addEventListener("click", ()=>{
+    rawRows = buildDemoData();
+    buildFilters();
+    render();
+    setStatus(`${rawRows.length} filas · demo`, "live");
+    showError(null);
+  });
+
+  function buildDemoData(){
+    const activos = ["CCPM","Pasares","Kinetika","C10","Truper"];
+    const paquetesGasto = ["Mantenimiento","Salarios","Prestaciones","Gastos Energéticos"];
+    const lineasIngreso = ["Canon Anclas","Canon Comercios","CAM"];
+    const lineasGasto = ["Gasto Financiero","Mantenimiento General","Seguridad","Administración"];
+    const rows = [];
+    const hoy = new Date().getMonth()+1;
+    activos.forEach(act=>{
+      lineasIngreso.forEach(lin=>{
+        const base = 8000 + Math.random()*20000;
+        for(let m=1;m<=12;m++){
+          const presu = base * (1 + (Math.random()-0.5)*0.05);
+          rows.push({activo:act, linea:lin, paquete:"Ingresos Operativos", tipoDetalle:"Ingreso Operativo", tipo:"Ingreso", mes:m, monto:Math.round(presu), fuente:"Presupuesto"});
+          if(m<=hoy){
+            const ritmo = 0.85 + Math.random()*0.35;
+            rows.push({activo:act, linea:lin, paquete:"Ingresos Operativos", tipoDetalle:"Ingreso Operativo", tipo:"Ingreso", mes:m, monto:Math.round(presu*ritmo), fuente:"Ejecutado"});
+          }
+        }
+      });
+      lineasGasto.forEach((lin,i)=>{
+        const base = 3000 + Math.random()*18000;
+        const disparado = lin==="Gasto Financiero" && (act==="Pasares"||act==="C10");
+        const paquete = disparado ? "Gasto Financiero" : paquetesGasto[i % paquetesGasto.length];
+        for(let m=1;m<=12;m++){
+          const presu = base * (1 + (Math.random()-0.5)*0.05);
+          rows.push({activo:act, linea:lin, paquete:paquete, tipoDetalle:disparado?"Gasto Financiero":"Gastos Operativos", tipo:"Gasto", mes:m, monto:Math.round(presu), fuente:"Presupuesto"});
+          if(m<=hoy){
+            let ritmo = 0.9 + Math.random()*0.3;
+            if(disparado) ritmo += 0.35;
+            rows.push({activo:act, linea:lin, paquete:paquete, tipoDetalle:disparado?"Gasto Financiero":"Gastos Operativos", tipo:"Gasto", mes:m, monto:Math.round(presu*ritmo), fuente:"Ejecutado"});
+          }
+        }
+      });
+    });
+    return rows;
+  }
+
+  function fillSelect(id, values, current, placeholder){
+    const sel = el(id);
+    sel.innerHTML = `<option value="Todos">${placeholder}</option>` +
+      values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    sel.value = values.includes(current) ? current : "Todos";
+  }
+
+  function buildFilters(){
+    const activos = Array.from(new Set(rawRows.map(r=>r.activo))).sort();
+    fillSelect("activoFilter", activos, filtroActivo, "Todos los activos");
+
+    let base1 = filtroActivo==="Todos" ? rawRows : rawRows.filter(r=>r.activo===filtroActivo);
+    const tipos = Array.from(new Set(base1.map(r=>r.tipoDetalle).filter(Boolean))).sort();
+    fillSelect("tipoDetalleFilter", tipos, filtroTipoDetalle, "Todos los tipos");
+
+    let base2 = filtroTipoDetalle==="Todos" ? base1 : base1.filter(r=>r.tipoDetalle===filtroTipoDetalle);
+    const paquetes = Array.from(new Set(base2.map(r=>r.paquete).filter(Boolean))).sort();
+    fillSelect("paqueteFilter", paquetes, filtroPaquete, "Todos los paquetes");
+
+    let base3 = filtroPaquete==="Todos" ? base2 : base2.filter(r=>r.paquete===filtroPaquete);
+    const categorias = Array.from(new Set(base3.map(r=>r.linea).filter(Boolean))).sort();
+    fillSelect("categoriaFilter", categorias, filtroCategoria, "Todas las categorías");
+  }
+
+  el("activoFilter").addEventListener("change", (e)=>{
+    filtroActivo = e.target.value; filtroTipoDetalle="Todos"; filtroPaquete="Todos"; filtroCategoria="Todos";
+    buildFilters(); render();
+  });
+  el("tipoDetalleFilter").addEventListener("change", (e)=>{
+    filtroTipoDetalle = e.target.value; filtroPaquete="Todos"; filtroCategoria="Todos";
+    buildFilters(); render();
+  });
+  el("paqueteFilter").addEventListener("change", (e)=>{
+    filtroPaquete = e.target.value; filtroCategoria="Todos";
+    buildFilters(); render();
+  });
+  el("categoriaFilter").addEventListener("change", (e)=>{ filtroCategoria = e.target.value; render(); });
+
+  function getFilteredRows(){
+    let rows = rawRows;
+    if(filtroActivo!=="Todos") rows = rows.filter(r=>r.activo===filtroActivo);
+    if(filtroTipoDetalle!=="Todos") rows = rows.filter(r=>r.tipoDetalle===filtroTipoDetalle);
+    if(filtroPaquete!=="Todos") rows = rows.filter(r=>r.paquete===filtroPaquete);
+    if(filtroCategoria!=="Todos") rows = rows.filter(r=>r.linea===filtroCategoria);
+    return rows;
+  }
+
+  // ---------- aggregation ----------
+  function aggregateByLinea(rows){
+    const map = new Map();
+    rows.forEach(r=>{
+      const key = r.linea + "||" + r.tipo;
+      if(!map.has(key)) map.set(key, {
+        linea:r.linea, tipo:r.tipo, paquete:r.paquete, tipoDetalle:r.tipoDetalle,
+        presupuestoMes:0, ejecutadoMes:0, presupuestoAcum:0, ejecutadoAcum:0, presupuestoAnual:0
+      });
+      const a = map.get(key);
+      if(r.fuente==="Presupuesto"){
+        a.presupuestoAnual += r.monto;
+        if(r.mes<=corteMes) a.presupuestoAcum += r.monto;
+        if(r.mes===corteMes) a.presupuestoMes += r.monto;
+      } else if(r.fuente==="Ejecutado"){
+        if(r.mes<=corteMes) a.ejecutadoAcum += r.monto;
+        if(r.mes===corteMes) a.ejecutadoMes += r.monto;
+      }
+    });
+    return Array.from(map.values()).map(a=>{
+      const ritmoMensual = corteMes>0 ? a.ejecutadoAcum/corteMes : 0;
+      const proyeccion = a.ejecutadoAcum + ritmoMensual*(12-corteMes);
+      const gapMesPct = a.presupuestoMes>0 ? ((a.ejecutadoMes-a.presupuestoMes)/a.presupuestoMes)*100 : 0;
+      const gapAcumPct = a.presupuestoAcum>0 ? ((a.ejecutadoAcum-a.presupuestoAcum)/a.presupuestoAcum)*100 : 0;
+      const gapCierrePct = a.presupuestoAnual>0 ? ((proyeccion-a.presupuestoAnual)/a.presupuestoAnual)*100 : 0;
+      const favorable = a.tipo==="Ingreso" ? gapCierrePct>=0 : gapCierrePct<=0;
+      return {...a, proyeccion, gapMesPct, gapAcumPct, gapCierrePct, favorable};
+    });
+  }
+
+  function totalsByTipo(rows, tipo){
+    const filtered = rows.filter(r=>r.tipo===tipo);
+    const presupuestoAnual = filtered.filter(r=>r.fuente==="Presupuesto").reduce((s,r)=>s+r.monto,0);
+    const presupuestoAcum = filtered.filter(r=>r.fuente==="Presupuesto" && r.mes<=corteMes).reduce((s,r)=>s+r.monto,0);
+    const presupuestoMes = filtered.filter(r=>r.fuente==="Presupuesto" && r.mes===corteMes).reduce((s,r)=>s+r.monto,0);
+    const ejecutadoAcum = filtered.filter(r=>r.fuente==="Ejecutado" && r.mes<=corteMes).reduce((s,r)=>s+r.monto,0);
+    const ejecutadoMes = filtered.filter(r=>r.fuente==="Ejecutado" && r.mes===corteMes).reduce((s,r)=>s+r.monto,0);
+    const ritmoMensual = corteMes>0 ? ejecutadoAcum/corteMes : 0;
+    const proyeccion = ejecutadoAcum + ritmoMensual*(12-corteMes);
+    return {presupuestoAnual, presupuestoAcum, presupuestoMes, ejecutadoAcum, ejecutadoMes, proyeccion};
+  }
+
+  // ---------- render: resumen ----------
+  function renderResumen(rows){
+    const ing = totalsByTipo(rows, "Ingreso");
+    const gas = totalsByTipo(rows, "Gasto");
+    const neto = {
+      presupuestoAnual: ing.presupuestoAnual - gas.presupuestoAnual,
+      presupuestoAcum: ing.presupuestoAcum - gas.presupuestoAcum,
+      presupuestoMes: ing.presupuestoMes - gas.presupuestoMes,
+      ejecutadoAcum: ing.ejecutadoAcum - gas.ejecutadoAcum,
+      ejecutadoMes: ing.ejecutadoMes - gas.ejecutadoMes,
+      proyeccion: ing.proyeccion - gas.proyeccion,
+    };
+    function row(nombre, t, esGasto){
+      const gapMes = t.presupuestoMes!==0 ? ((t.ejecutadoMes-t.presupuestoMes)/Math.abs(t.presupuestoMes))*100 : 0;
+      const gapAcum = t.presupuestoAcum!==0 ? ((t.ejecutadoAcum-t.presupuestoAcum)/Math.abs(t.presupuestoAcum))*100 : 0;
+      const gapCierre = t.presupuestoAnual!==0 ? ((t.proyeccion-t.presupuestoAnual)/Math.abs(t.presupuestoAnual))*100 : 0;
+      const favMes = esGasto===null ? gapMes>=0 : (esGasto ? gapMes<=0 : gapMes>=0);
+      const favAcum = esGasto===null ? gapAcum>=0 : (esGasto ? gapAcum<=0 : gapAcum>=0);
+      const favCierre = esGasto===null ? gapCierre>=0 : (esGasto ? gapCierre<=0 : gapCierre>=0);
+      return `<tr>
+        <td class="rowlabel">${nombre}</td>
+        <td>${fmtMoney(t.ejecutadoMes)}</td>
+        <td class="gap ${favMes?'pos':'neg'}">${fmtPct(gapMes)}</td>
+        <td>${fmtMoney(t.ejecutadoAcum)}</td>
+        <td class="gap ${favAcum?'pos':'neg'}">${fmtPct(gapAcum)}</td>
+        <td>${fmtMoney(t.proyeccion)}</td>
+        <td>${fmtMoney(t.presupuestoAnual)}</td>
+        <td class="gap ${favCierre?'pos':'neg'}">${fmtPct(gapCierre)}</td>
+      </tr>`;
+    }
+    el("resumenBody").innerHTML =
+      row("Ingresos", ing, false) +
+      row("Gastos", gas, true) +
+      row("Resultado neto", neto, null);
+  }
+
+  function renderRunway(rows){
+    const ing = totalsByTipo(rows, "Ingreso");
+    const gas = totalsByTipo(rows, "Gasto");
+    const timePct = clamp((corteMes/12)*100, 0, 100);
+    function rowHTML(nombre, tot, tipoClass, isGasto){
+      const pctEjec = tot.presupuestoAnual>0 ? clamp((tot.ejecutadoAcum/tot.presupuestoAnual)*100, 0, 140) : 0;
+      const ahead = pctEjec > timePct;
+      let fillClass = tipoClass;
+      if(isGasto && ahead) fillClass = "over-bad";
+      if(!isGasto && !ahead) fillClass = "over-bad";
+      return `
+        <div class="runway-row">
+          <div class="runway-label"><span class="name">${nombre}</span><span>${fmtMoney(tot.ejecutadoAcum)} / ${fmtMoney(tot.presupuestoAnual)}</span></div>
+          <div class="runway-track">
+            <div class="runway-fill ${fillClass}" style="width:${clamp(pctEjec,0,100)}%"></div>
+            <div class="time-marker" style="left:${timePct}%" data-label="${timePct.toFixed(0)}% del año"></div>
+          </div>
+          <div class="runway-figures"><span>${pctEjec.toFixed(1)}% ejecutado acumulado</span><span>Proyección cierre: ${fmtMoney(tot.proyeccion)}</span></div>
+        </div>`;
+    }
+    el("runwayRows").innerHTML = rowHTML("Ingresos", ing, "ingreso", false) + rowHTML("Gastos", gas, "gasto", true);
+  }
+
+  let expandedPaquetes = new Set();
+
+  function aggregateByPaquete(items){
+    const map = new Map();
+    items.forEach(c=>{
+      const key = c.paquete || "Sin paquete";
+      if(!map.has(key)) map.set(key, {paquete:key, items:[], presupuestoMes:0, ejecutadoMes:0, presupuestoAcum:0, ejecutadoAcum:0, presupuestoAnual:0, proyeccion:0});
+      const p = map.get(key);
+      p.items.push(c);
+      p.presupuestoMes += c.presupuestoMes;
+      p.ejecutadoMes += c.ejecutadoMes;
+      p.presupuestoAcum += c.presupuestoAcum;
+      p.ejecutadoAcum += c.ejecutadoAcum;
+      p.presupuestoAnual += c.presupuestoAnual;
+      p.proyeccion += c.proyeccion;
+    });
+    return Array.from(map.values()).map(p=>{
+      const gapMesPct = p.presupuestoMes>0 ? ((p.ejecutadoMes-p.presupuestoMes)/p.presupuestoMes)*100 : 0;
+      const gapAcumPct = p.presupuestoAcum>0 ? ((p.ejecutadoAcum-p.presupuestoAcum)/p.presupuestoAcum)*100 : 0;
+      const gapCierrePct = p.presupuestoAnual>0 ? ((p.proyeccion-p.presupuestoAnual)/p.presupuestoAnual)*100 : 0;
+      const tiposEnPaquete = new Set(p.items.map(i=>i.tipo));
+      const esSoloIngreso = tiposEnPaquete.size===1 && tiposEnPaquete.has("Ingreso");
+      const favorable = esSoloIngreso ? gapCierrePct>=0 : gapCierrePct<=0;
+      return {...p, gapMesPct, gapAcumPct, gapCierrePct, favorable, esSoloIngreso};
+    });
+  }
+
+  function gapCellHTML(pct, base, favorable){
+    if(base<=0) return `<td style="color:var(--text-faint);">–</td>`;
+    return `<td style="color:${favorable?'var(--green)':'var(--red)'};">${fmtPct(pct)}</td>`;
+  }
+
+  function renderDrill(rows){
+    const items = aggregateByLinea(rows);
+    let paquetes = aggregateByPaquete(items);
+    paquetes.sort((a,b)=> Math.abs(b.gapCierrePct) - Math.abs(a.gapCierrePct));
+
+    let html = "";
+    paquetes.forEach(p=>{
+      const isOpen = expandedPaquetes.has(p.paquete);
+      html += `
+      <tr class="paquete-row" data-paquete="${esc(p.paquete)}">
+        <td class="linea"><span class="toggle-icon ${isOpen?'open':''}">▶</span>${esc(p.paquete)} <span class="count">(${p.items.length})</span></td>
+        <td>${p.esSoloIngreso ? '<span class="tag ingreso">Ingreso</span>' : '<span class="tag gasto">Gasto</span>'}</td>
+        <td>${fmtMoney(p.presupuestoMes)}</td>
+        <td>${fmtMoney(p.ejecutadoMes)}</td>
+        ${gapCellHTML(p.gapMesPct, p.presupuestoMes, p.esSoloIngreso ? p.gapMesPct>=0 : p.gapMesPct<=0)}
+        <td>${fmtMoney(p.presupuestoAcum)}</td>
+        <td>${fmtMoney(p.ejecutadoAcum)}</td>
+        ${gapCellHTML(p.gapAcumPct, p.presupuestoAcum, p.esSoloIngreso ? p.gapAcumPct>=0 : p.gapAcumPct<=0)}
+        <td>${fmtMoney(p.presupuestoAnual)}</td>
+        <td>${fmtMoney(p.proyeccion)}</td>
+        <td><span class="gap-cell" style="color:${p.favorable?'var(--green)':'var(--red)'}; background:${p.favorable?'rgba(95,191,143,0.12)':'rgba(226,102,92,0.12)'};">${fmtPct(p.gapCierrePct)}</span></td>
+      </tr>`;
+
+      if(isOpen){
+        let cats = [...p.items];
+        cats.sort((a,b)=>{
+          const va = a[sortState.key], vb = b[sortState.key];
+          if(typeof va === "string") return va.localeCompare(vb) * sortState.dir;
+          return (va - vb) * sortState.dir;
+        });
+        cats.forEach(d=>{
+          const gapMesColor = d.presupuestoMes>0 ? ((d.tipo==="Ingreso") === (d.gapMesPct>=0) ? "var(--green)" : "var(--red)") : "var(--text-faint)";
+          const gapAcumColor = d.presupuestoAcum>0 ? ((d.tipo==="Ingreso") === (d.gapAcumPct>=0) ? "var(--green)" : "var(--red)") : "var(--text-faint)";
+          const gapCierreColor = d.favorable ? "var(--green)" : "var(--red)";
+          const gapCierreBg = d.favorable ? "rgba(95,191,143,0.12)" : "rgba(226,102,92,0.12)";
+          html += `
+          <tr class="categoria-row">
+            <td class="linea">${esc(d.linea)}</td>
+            <td><span class="tag ${d.tipo==='Ingreso'?'ingreso':'gasto'}">${d.tipoDetalle||d.tipo}</span></td>
+            <td>${fmtMoney(d.presupuestoMes)}</td>
+            <td>${fmtMoney(d.ejecutadoMes)}</td>
+            <td style="color:${gapMesColor};">${fmtPct(d.gapMesPct)}</td>
+            <td>${fmtMoney(d.presupuestoAcum)}</td>
+            <td>${fmtMoney(d.ejecutadoAcum)}</td>
+            <td style="color:${gapAcumColor};">${fmtPct(d.gapAcumPct)}</td>
+            <td>${fmtMoney(d.presupuestoAnual)}</td>
+            <td>${fmtMoney(d.proyeccion)}</td>
+            <td><span class="gap-cell" style="color:${gapCierreColor}; background:${gapCierreBg};">${fmtPct(d.gapCierrePct)}</span></td>
+          </tr>`;
+        });
+      }
+    });
+    el("drillBody").innerHTML = html;
+  }
+
+  el("drillBody").addEventListener("click", (e)=>{
+    const tr = e.target.closest("tr.paquete-row");
+    if(!tr) return;
+    const key = tr.dataset.paquete;
+    if(expandedPaquetes.has(key)) expandedPaquetes.delete(key); else expandedPaquetes.add(key);
+    renderDrill(getFilteredRows());
+  });
+
+  document.querySelectorAll("table.drill th.sortable").forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const key = th.dataset.sort;
+      if(sortState.key===key) sortState.dir *= -1; else { sortState.key=key; sortState.dir=-1; }
+      renderDrill(getFilteredRows());
+    });
+  });
+
+  function renderMovers(rows){
+    const data = aggregateByLinea(rows).filter(d=>d.presupuestoAnual>0);
+    const bad = data.filter(d=>!d.favorable).sort((a,b)=>Math.abs(b.gapCierrePct)-Math.abs(a.gapCierrePct)).slice(0,5);
+    const good = data.filter(d=>d.favorable).sort((a,b)=>Math.abs(b.gapCierrePct)-Math.abs(a.gapCierrePct)).slice(0,5);
+    const itemHTML = (d, negative) => `
+      <div class="mover-item">
+        <div>
+          <div class="mover-name">${d.linea}</div>
+          <div class="mover-sub">${d.tipoDetalle||d.tipo} · ${fmtMoney(d.proyeccion)} proy.</div>
+        </div>
+        <div class="mover-val" style="color:${negative?'var(--red)':'var(--green)'}">${fmtPct(d.gapCierrePct)}</div>
+      </div>`;
+    el("moversBad").innerHTML = bad.length ? bad.map(d=>itemHTML(d,true)).join("") : `<div class="mover-sub">Sin desvíos negativos</div>`;
+    el("moversGood").innerHTML = good.length ? good.map(d=>itemHTML(d,false)).join("") : `<div class="mover-sub">Sin datos</div>`;
+  }
+
+  function renderBurnChart(rows){
+    const netoPorMes = Array(12).fill(0).map((_,i)=>{
+      const m = i+1;
+      if(m>corteMes) return null;
+      const ing = rows.filter(r=>r.tipo==="Ingreso" && r.mes===m && r.fuente==="Ejecutado").reduce((s,r)=>s+r.monto,0);
+      const gas = rows.filter(r=>r.tipo==="Gasto" && r.mes===m && r.fuente==="Ejecutado").reduce((s,r)=>s+r.monto,0);
+      return ing-gas;
+    });
+    const acumulado = [];
+    let run = 0;
+    netoPorMes.forEach(v=>{ if(v===null){acumulado.push(null);} else {run+=v; acumulado.push(run);} });
+
+    const presuNetoAnual = totalsByTipo(rows,"Ingreso").presupuestoAnual - totalsByTipo(rows,"Gasto").presupuestoAnual;
+    const lineal = Array(12).fill(0).map((_,i)=> presuNetoAnual/12*(i+1));
+
+    const ultimoReal = acumulado.filter(v=>v!==null).slice(-1)[0] || 0;
+    const ritmo = corteMes>0 ? ultimoReal/corteMes : 0;
+    const proyectado = Array(12).fill(0).map((_,i)=>{
+      const m=i+1;
+      if(m<=corteMes) return null;
+      return ritmo*m;
+    });
+
+    if(burnChartInstance) burnChartInstance.destroy();
+    const ctx = el("burnChart").getContext("2d");
+    burnChartInstance = new Chart(ctx, {
+      type:"line",
+      data:{ labels: meses, datasets:[
+        {label:"Ejecutado acumulado", data:acumulado, borderColor:"#5FBF8F", backgroundColor:"transparent", tension:0.25, spanGaps:false},
+        {label:"Presupuesto lineal", data:lineal, borderColor:"#93765A", borderDash:[4,4], backgroundColor:"transparent", tension:0, pointRadius:0},
+        {label:"Proyección", data:proyectado, borderColor:"#F07C1D", borderDash:[2,2], backgroundColor:"transparent", tension:0.25, pointRadius:2},
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:"#CDB197", font:{size:10, family:"IBM Plex Mono"} } } },
+        scales:{
+          x:{ ticks:{color:"#93765A", font:{size:10}}, grid:{color:"#2A1E12"} },
+          y:{ ticks:{color:"#93765A", font:{size:10}, callback:v=>"$"+(v/1000).toFixed(0)+"k"}, grid:{color:"#2A1E12"} }
+        }
+      }
+    });
+  }
+
+  function renderHeatmap(rows){
+    const lineas = Array.from(new Set(rows.map(r=>r.linea+"||"+r.tipo)));
+    let html = '<table class="drill" style="min-width:520px;"><thead><tr><th class="left">Categoría</th>' +
+      meses.map(m=>`<th style="text-align:center;">${m}</th>`).join("") + '</tr></thead><tbody>';
+    lineas.forEach(key=>{
+      const [linea, tipo] = key.split("||");
+      html += `<tr><td class="linea">${linea}</td>`;
+      for(let m=1;m<=12;m++){
+        if(m>corteMes){ html += `<td style="text-align:center;color:var(--text-faint);">–</td>`; continue; }
+        const presu = rows.filter(r=>r.linea===linea && r.tipo===tipo && r.mes===m && r.fuente==="Presupuesto").reduce((s,r)=>s+r.monto,0);
+        const ejec = rows.filter(r=>r.linea===linea && r.tipo===tipo && r.mes===m && r.fuente==="Ejecutado").reduce((s,r)=>s+r.monto,0);
+        if(presu===0){ html += `<td style="text-align:center;color:var(--text-faint);">–</td>`; continue; }
+        const dev = ((ejec-presu)/presu)*100;
+        const favorable = tipo==="Ingreso" ? dev>=0 : dev<=0;
+        const intensity = clamp(Math.abs(dev)/30, 0, 1);
+        const color = favorable ? `rgba(95,191,143,${0.15+intensity*0.55})` : `rgba(226,102,92,${0.15+intensity*0.55})`;
+        html += `<td style="text-align:center; background:${color}; color:#F6EEE3;">${dev.toFixed(0)}%</td>`;
+      }
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    el("heatmapWrap").innerHTML = html;
+  }
+
+  function render(){
+    if(rawRows.length===0){
+      el("emptyState").style.display = "block";
+      el("dashboard").style.display = "none";
+      return;
+    }
+    el("emptyState").style.display = "none";
+    el("dashboard").style.display = "block";
+    setStatus(`${rawRows.length} filas · corte mes ${corteMes}`, "live");
+
+    const rows = getFilteredRows();
+    renderResumen(rows);
+    renderRunway(rows);
+    renderDrill(rows);
+    renderMovers(rows);
+    renderBurnChart(rows);
+    renderHeatmap(rows);
+  }
+
+  (async function init(){
+    initMonthSelect();
+    wireManualUpload();
+    await fetchFromAPI();
+  })();
+
+})();
+</script>
+</body>
+</html>
